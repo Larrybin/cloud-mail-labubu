@@ -1,6 +1,6 @@
 name = "test-mail"
 main = "src/index.js"
-compatibility_date = "2025-06-04"
+compatibility_date = "2025-03-10"
 keep_vars = true
 
 [observability]
@@ -22,7 +22,7 @@ id = "9be10cd058e04c55b526f8c0c116f50c"					#kv数据库id
 
 [assets]
 binding = "assets"		#静态资源绑定名默认不可修改
-directory = "./dist"	#前端vue项目打包的静态资源存放位置,默认dist
+directory = "./test-assets"	# 测试仅校验 worker API，不依赖前端静态产物
 not_found_handling = "single-page-application"
 run_worker_first = true
 
@@ -35,6 +35,13 @@ orm_log = false
 domain = ["example.com"]				#邮件域名可可配置多个 示例: ["example1.com","example2.com"]
 admin = "admin@example.com"				#管理员的邮箱	示例: admin@example.com
 jwt_secret = "b7f29a1d-18e2-4d3b-941f-f6b2c97c02fd"			#jwt令牌的密钥,随便填一串字符串
+FORM_API_TOKEN = "test-form-api-token"
+FORM_ALLOWED_TO_EMAILS = "admin@example.com"
+FORM_FILE_TTL_SECONDS = "600"
+
+# secrets for tests/local verification:
+# wrangler secret put FORM_RESEND_API_KEY --config wrangler-test.toml
+# wrangler secret put FORM_FILE_SECRET --config wrangler-test.toml
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

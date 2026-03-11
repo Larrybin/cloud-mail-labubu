@@ -87,6 +87,16 @@ const premKey = {
 	'reg-key:delete': ['/regKey/delete','/regKey/clearNotUse'],
 };
 
+function extractBearerToken(headerValue) {
+	if (!headerValue || typeof headerValue !== 'string') {
+		return '';
+	}
+	const trimmed = headerValue.trim();
+	if (!trimmed) return '';
+	if (!trimmed.toLowerCase().startsWith('bearer ')) return '';
+	return trimmed.slice(7).trim();
+}
+
 app.use('*', async (c, next) => {
 
 	const path = c.req.path;
@@ -96,6 +106,19 @@ app.use('*', async (c, next) => {
 	});
 
 	if (index > -1) {
+		return await next();
+	}
+
+	if (path === '/form/file') {
+		return await next();
+	}
+
+	if (path.startsWith('/form/')) {
+		const expectedToken = String(c.env.FORM_API_TOKEN || '').trim();
+		const token = extractBearerToken(c.req.header(constant.TOKEN_HEADER));
+		if (!expectedToken || token !== expectedToken) {
+			throw new BizError(t('publicTokenFail'), 401);
+		}
 		return await next();
 	}
 

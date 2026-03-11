@@ -70,6 +70,14 @@
 
 - **📜 更多功能**：正在开发中...
 
+## 与 Labubu 网关集成（新增）
+
+- 外部路径：`POST /api/form/submit`、`GET /api/form/file`
+- `mail-worker` 内部注册路径：`/form/submit`、`/form/file`（`/api` 前缀由入口转发剥离）
+- `/form/*` 使用独立 `FORM_API_TOKEN` 鉴权，优先级高于 `/public/*` 与默认 JWT/RBAC 分支
+- `/api/form/submit` 必须同时满足 `FORM_ALLOWED_TO_EMAILS` 收件人白名单与请求体大小限制
+- `FORM_RESEND_API_KEY` 仅在 mail-worker 内部发信用途，禁止透传到请求体、响应体、日志字段
+
 
 
 ## 技术栈
@@ -151,6 +159,4 @@ cloud-mail
 ## 交流
 
 [Telegram](https://t.me/cloud_mail_tg)
-
-
 

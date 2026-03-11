@@ -1,6 +1,6 @@
 name = "cloud-mail"
 main = "src/index.js"
-compatibility_date = "2025-06-04"
+compatibility_date = "2025-03-10"
 keep_vars = true
 
 [observability]
@@ -18,6 +18,7 @@ enabled = true
 #[[r2_buckets]]
 #binding = "r2"			#r2对象存储绑定名默认不可修改
 #bucket_name = ""		#r2对象存储桶的名字
+# 说明：/api/form/file 与 /api/form/submit(含附件) 依赖 r2 绑定
 
 [assets]
 binding = "assets"		#静态资源绑定名默认不可修改
@@ -34,6 +35,13 @@ crons = ["0 16 * * *"]	#定时任务每天晚上12点执行
 #domain = []				#邮件域名可可配置多个 示例: ["example1.com","example2.com"]
 #admin = ""				#管理员的邮箱	示例: admin@example.com
 #jwt_secret = ""			#jwt令牌的密钥,随便填一串字符串
+#FORM_API_TOKEN = ""		#/api/form/* 专用服务间令牌（Bearer）
+#FORM_ALLOWED_TO_EMAILS = ""	#/api/form/submit 允许的收件人（逗号分隔）
+#FORM_FILE_TTL_SECONDS = "604800"	#/api/form/file 下载签名有效期（秒）
+
+# secrets（通过 wrangler secret put 管理）:
+# - FORM_RESEND_API_KEY   # /api/form/submit 内部发信专用，不可透传
+# - FORM_FILE_SECRET      # /api/form/file 下载签名密钥
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
