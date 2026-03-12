@@ -19,6 +19,8 @@ jobs:
       DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
       JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
+      FORM_API_TOKEN: ${{ secrets.FORM_API_TOKEN || vars.FORM_API_TOKEN }}
+      FORM_ALLOWED_TO_EMAILS: ${{ secrets.FORM_ALLOWED_TO_EMAILS || vars.FORM_ALLOWED_TO_EMAILS }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID || vars.D1_DATABASE_ID }}
@@ -77,6 +79,16 @@ jobs:
             echo "❌ ADMIN variable cannot be empty."
             exit 1
           fi
+
+          if [ -z "$FORM_API_TOKEN" ]; then
+            echo "❌ FORM_API_TOKEN variable cannot be empty."
+            exit 1
+          fi
+
+          if [ -z "$FORM_ALLOWED_TO_EMAILS" ]; then
+            echo "❌ FORM_ALLOWED_TO_EMAILS variable cannot be empty."
+            exit 1
+          fi
           
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "❌ CLOUDFLARE_ACCOUNT_ID variable cannot be empty."
@@ -111,6 +123,8 @@ jobs:
           sed -i "s|\"\${DOMAIN}\"|${DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN}|${ADMIN}|g" "$CONFIG_FILE"
           sed -i "s|\${JWT_SECRET}|${JWT_SECRET}|g" "$CONFIG_FILE"
+          sed -i "s|\${FORM_API_TOKEN}|${FORM_API_TOKEN}|g" "$CONFIG_FILE"
+          sed -i "s|\${FORM_ALLOWED_TO_EMAILS}|${FORM_ALLOWED_TO_EMAILS}|g" "$CONFIG_FILE"
           sed -i "s|\${R2_BUCKET_NAME}|${R2_BUCKET_NAME}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CLIENT_ID}|${LINUXDO_CLIENT_ID}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CLIENT_SECRET}|${LINUXDO_CLIENT_SECRET}|g" "$CONFIG_FILE"
