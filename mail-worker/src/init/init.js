@@ -28,8 +28,71 @@ const dbInit = {
 		await this.v2_7DB(c);
 		await this.v2_8DB(c);
 		await this.v2_9DB(c);
+		await this.v3DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3DB(c) {
+		try {
+			await c.env.db.prepare(`
+				CREATE TABLE IF NOT EXISTS subscriber (
+					subscriber_id TEXT PRIMARY KEY,
+					list_key TEXT NOT NULL,
+					email TEXT NOT NULL,
+					normalized_email TEXT NOT NULL,
+					status TEXT NOT NULL DEFAULT 'subscribed',
+					source_type TEXT NOT NULL DEFAULT '',
+					site_origin TEXT NOT NULL DEFAULT '',
+					brand_id TEXT NOT NULL DEFAULT '',
+					brand_name TEXT NOT NULL DEFAULT '',
+					locale TEXT NOT NULL DEFAULT '',
+					source_path TEXT NOT NULL DEFAULT '/',
+					first_subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					last_subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				)
+			`).run();
+			await c.env.db.prepare(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriber_list_email
+				ON subscriber (list_key, normalized_email)
+			`).run();
+			await c.env.db.prepare(`
+				CREATE INDEX IF NOT EXISTS idx_subscriber_last_subscribed_at
+				ON subscriber (last_subscribed_at DESC)
+			`).run();
+		} catch (e) {
+			console.warn(`跳过订阅者表：${e.message}`);
+		}
+
+		try {
+			await c.env.db.prepare(`
+				CREATE TABLE IF NOT EXISTS subscriber_event (
+					event_id TEXT PRIMARY KEY,
+					subscriber_id TEXT NOT NULL,
+					event_type TEXT NOT NULL,
+					payload_json TEXT NOT NULL DEFAULT '{}',
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				)
+			`).run();
+			await c.env.db.prepare(`
+				CREATE INDEX IF NOT EXISTS idx_subscriber_event_subscriber_id
+				ON subscriber_event (subscriber_id, created_at DESC)
+			`).run();
+		} catch (e) {
+			console.warn(`跳过订阅者事件表：${e.message}`);
+		}
+
+		try {
+			await c.env.db.prepare(`
+				INSERT INTO perm (perm_id, name, perm_key, pid, type, sort) VALUES
+				(37, '订阅者', NULL, 0, 1, 4.5),
+				(38, '订阅查看', 'subscriber:query', 37, 2, 0)
+			`).run();
+		} catch (e) {
+			console.warn(`跳过订阅权限：${e.message}`);
+		}
 	},
 
 	async v2_9DB(c) {

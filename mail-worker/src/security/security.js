@@ -43,6 +43,8 @@ const requirePerms = [
 	'/setting/deleteBackground',
 	'/setting/set',
 	'/setting/query',
+	'/subscriber/list',
+	'/subscriber/export',
 	'/user/delete',
 	'/user/setPwd',
 	'/user/setStatus',
@@ -85,6 +87,7 @@ const premKey = {
 	'reg-key:add': ['/regKey/add'],
 	'reg-key:query': ['/regKey/list','/regKey/history'],
 	'reg-key:delete': ['/regKey/delete','/regKey/clearNotUse'],
+	'subscriber:query': ['/subscriber/list', '/subscriber/export'],
 };
 
 function extractBearerToken(headerValue) {
@@ -95,6 +98,17 @@ function extractBearerToken(headerValue) {
 	if (!trimmed) return '';
 	if (!trimmed.toLowerCase().startsWith('bearer ')) return '';
 	return trimmed.slice(7).trim();
+}
+
+function extractHeaderToken(headerValue) {
+	if (!headerValue || typeof headerValue !== 'string') {
+		return '';
+	}
+	const bearerToken = extractBearerToken(headerValue);
+	if (bearerToken) {
+		return bearerToken;
+	}
+	return headerValue.trim();
 }
 
 app.use('*', async (c, next) => {
@@ -113,6 +127,15 @@ app.use('*', async (c, next) => {
 		return await next();
 	}
 
+	if (path === '/subscriber/subscribe' && c.req.method === 'POST') {
+		const expectedToken = String(c.env.FORM_API_TOKEN || '').trim();
+		const token = extractBearerToken(c.req.header(constant.TOKEN_HEADER));
+		if (!expectedToken || token !== expectedToken) {
+			throw new BizError(t('publicTokenFail'), 401);
+		}
+		return await next();
+	}
+
 	if (path.startsWith('/form/')) {
 		const expectedToken = String(c.env.FORM_API_TOKEN || '').trim();
 		const token = extractBearerToken(c.req.header(constant.TOKEN_HEADER));
@@ -125,8 +148,8 @@ app.use('*', async (c, next) => {
 	if (path.startsWith('/public')) {
 
 		const userPublicToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
-		const publicToken = c.req.header(constant.TOKEN_HEADER);
-		if (publicToken !== userPublicToken) {
+		const publicToken = extractHeaderToken(c.req.header(constant.TOKEN_HEADER));
+		if (!publicToken || publicToken !== userPublicToken) {
 			throw new BizError(t('publicTokenFail'), 401);
 		}
 		return await next();

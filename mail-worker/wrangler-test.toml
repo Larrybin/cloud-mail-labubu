@@ -38,6 +38,10 @@ jwt_secret = "b7f29a1d-18e2-4d3b-941f-f6b2c97c02fd"			#jwt令牌的密钥,随便
 FORM_API_TOKEN = "test-form-api-token"
 FORM_ALLOWED_TO_EMAILS = "admin@example.com"
 FORM_FILE_TTL_SECONDS = "600"
+INIT_HTTP_ENABLED = "true"
+PUBLIC_TOKEN_TTL_SECONDS = "86400"
+CORS_ADMIN_ALLOWED_ORIGINS = ""
+CORS_PUBLIC_ALLOWED_ORIGINS = ""
 
 # secrets for tests/local verification:
 # wrangler secret put FORM_RESEND_API_KEY --config wrangler-test.toml

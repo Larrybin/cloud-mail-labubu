@@ -15,6 +15,16 @@ import email from '../entity/email';
 import userService from './user-service';
 import KvConst from '../const/kv-const';
 
+const DEFAULT_PUBLIC_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+
+function resolvePublicTokenTtlSeconds(env) {
+	const parsed = Number.parseInt(String(env.PUBLIC_TOKEN_TTL_SECONDS || ''), 10);
+	if (Number.isFinite(parsed) && parsed > 0) {
+		return parsed;
+	}
+	return DEFAULT_PUBLIC_TOKEN_TTL_SECONDS;
+}
+
 const publicService = {
 
 	async emailList(c, params) {
@@ -95,7 +105,7 @@ const publicService = {
 	},
 
 	async addUser(c, params) {
-		const { list } = params;
+		const list = Array.isArray(params?.list) ? params.list : [];
 
 		if (list.length === 0) return;
 
@@ -135,14 +145,34 @@ const publicService = {
 				type = roleRow ? roleRow.roleId : type;
 			}
 
-			const userSql = `INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
-			VALUES ('${email}', '${hash}', '${salt}', '${type}', '${os}', '${browser}', '${activeIp}', '${activeIp}', '${device}', '${activeTime}', '${activeTime}')`
+			userList.push(
+				c.env.db.prepare(
+					`INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				).bind(
+					email,
+					hash,
+					salt,
+					type,
+					os,
+					browser,
+					activeIp,
+					activeIp,
+					device,
+					activeTime,
+					activeTime,
+				),
+			);
 
-			const accountSql = `INSERT INTO account (email, name, user_id)
-			VALUES ('${email}', '${emailUtils.getName(email)}', 0);`;
-
-			userList.push(c.env.db.prepare(userSql));
-			userList.push(c.env.db.prepare(accountSql));
+			userList.push(
+				c.env.db.prepare(
+					`INSERT INTO account (email, name, user_id)
+					VALUES (?, ?, 0)`,
+				).bind(
+					email,
+					emailUtils.getName(email),
+				),
+			);
 
 		}
 
@@ -165,8 +195,9 @@ const publicService = {
 		await this.verifyUser(c, params)
 
 		const uuid = uuidv4();
+		const expirationTtl = resolvePublicTokenTtlSeconds(c.env);
 
-		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid);
+		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid, { expirationTtl });
 
 		return {token: uuid}
 	},

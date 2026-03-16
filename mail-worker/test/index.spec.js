@@ -1,9 +1,39 @@
-import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import worker from '../src';
 import formService, { FORM_ATTACHMENT_PREFIX, createFormFileSignature } from '../src/service/form-service';
+import cryptoUtils from '../src/utils/crypto-utils';
+import KvConst from '../src/const/kv-const';
+
+async function initDatabase() {
+	const req = new Request(`https://mail.example/api/init/${env.jwt_secret}`);
+	const ctx = createExecutionContext();
+	const resp = await worker.fetch(req, env, ctx);
+	await waitOnExecutionContext(ctx);
+	expect(resp.status).toBe(200);
+}
+
+async function ensureAdminUser(password = 'public-api-password') {
+	const { salt, hash } = await cryptoUtils.hashPassword(password);
+	await env.db
+		.prepare(
+			`INSERT OR REPLACE INTO user (user_id, email, type, password, salt, status, is_del)
+			 VALUES (1, ?, 1, ?, ?, 0, 0)`,
+		)
+		.bind(env.admin, hash, salt)
+		.run();
+}
 
 describe('form api security', () => {
+	it('returns 404 on /api/init/:secret when INIT_HTTP_ENABLED is disabled', async () => {
+		const req = new Request(`https://mail.example/api/init/${env.jwt_secret}`);
+		const disabledEnv = { ...env, INIT_HTTP_ENABLED: 'false' };
+		const ctx = createExecutionContext();
+		const resp = await worker.fetch(req, disabledEnv, ctx);
+		await waitOnExecutionContext(ctx);
+		expect(resp.status).toBe(404);
+	});
+
 	it('returns 401 on /api/form/submit when FORM_API_TOKEN mismatch', async () => {
 		const req = new Request('https://mail.example/api/form/submit', {
 			method: 'POST',
@@ -79,6 +109,110 @@ describe('form api security', () => {
 		const resp = await worker.fetch(req, env, ctx);
 		await waitOnExecutionContext(ctx);
 		expect(resp.status).toBe(403);
+	});
+
+	it('supports bearer token for /api/public/* and expires token by TTL', async () => {
+		await initDatabase();
+		const password = 'public-api-password';
+		await ensureAdminUser(password);
+
+		const ttlEnv = { ...env, PUBLIC_TOKEN_TTL_SECONDS: '60' };
+		const tokenReq = new Request('https://mail.example/api/public/genToken', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				email: env.admin,
+				password
+			})
+		});
+		const tokenCtx = createExecutionContext();
+		const tokenResp = await worker.fetch(tokenReq, ttlEnv, tokenCtx);
+		await waitOnExecutionContext(tokenCtx);
+		expect(tokenResp.status).toBe(200);
+		const tokenBody = await tokenResp.json();
+		const publicToken = tokenBody?.data?.token;
+		expect(typeof publicToken).toBe('string');
+
+		const listReq = new Request('https://mail.example/api/public/emailList', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				Authorization: `Bearer ${publicToken}`
+			},
+			body: JSON.stringify({})
+		});
+		const listCtx = createExecutionContext();
+		const listResp = await worker.fetch(listReq, ttlEnv, listCtx);
+		await waitOnExecutionContext(listCtx);
+		expect(listResp.status).toBe(200);
+
+		await env.kv.delete(KvConst.PUBLIC_KEY);
+
+		const expiredReq = new Request('https://mail.example/api/public/emailList', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				Authorization: `Bearer ${publicToken}`
+			},
+			body: JSON.stringify({})
+		});
+		const expiredCtx = createExecutionContext();
+		const expiredResp = await worker.fetch(expiredReq, ttlEnv, expiredCtx);
+		await waitOnExecutionContext(expiredCtx);
+		expect(expiredResp.status).toBe(401);
+	});
+
+	it("does not break on apostrophe email for /api/public/addUser", async () => {
+		await initDatabase();
+		const password = 'public-api-password';
+		await ensureAdminUser(password);
+
+		const tokenReq = new Request('https://mail.example/api/public/genToken', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				email: env.admin,
+				password
+			})
+		});
+		const tokenCtx = createExecutionContext();
+		const tokenResp = await worker.fetch(tokenReq, env, tokenCtx);
+		await waitOnExecutionContext(tokenCtx);
+		expect(tokenResp.status).toBe(200);
+		const tokenBody = await tokenResp.json();
+		const publicToken = tokenBody?.data?.token;
+		expect(typeof publicToken).toBe('string');
+
+		const injectedEmail = `o'hara${Date.now()}@example.com`;
+		const addUserReq = new Request('https://mail.example/api/public/addUser', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				Authorization: `Bearer ${publicToken}`
+			},
+			body: JSON.stringify({
+				list: [
+					{
+						email: injectedEmail,
+						password: '123456'
+					}
+				]
+			})
+		});
+		const addUserCtx = createExecutionContext();
+		const addUserResp = await worker.fetch(addUserReq, env, addUserCtx);
+		await waitOnExecutionContext(addUserCtx);
+		expect(addUserResp.status).toBe(200);
+
+		const userRow = await env.db
+			.prepare('SELECT email FROM user WHERE email = ? LIMIT 1')
+			.bind(injectedEmail)
+			.first();
+		expect(userRow?.email).toBe(injectedEmail);
 	});
 });
 

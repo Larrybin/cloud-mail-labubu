@@ -31,7 +31,7 @@
           <Icon icon="fluent:settings-48-regular" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('settings')}}</span>
         </el-menu-item>
-        <div class="manage-title" v-perm="['all-email:query','user:query','role:query','setting:query','analysis:query','reg-key:query']">
+        <div class="manage-title" v-perm="['all-email:query','subscriber:query','user:query','role:query','setting:query','analysis:query','reg-key:query']">
           <div>{{$t('manage')}}</div>
         </div>
         <el-menu-item @click="router.push({name: 'analysis'})" index="analysis" v-perm="'analysis:query'"
@@ -48,6 +48,11 @@
                       :class="route.meta.name === 'all-email' ? 'choose-item' : ''">
           <Icon icon="fluent:mail-list-28-regular" width="22" height="22" />
           <span class="menu-name" style="margin-left: 20px">{{$t('allMail')}}</span>
+        </el-menu-item>
+        <el-menu-item @click="router.push({name: 'subscriber'})" index="subscriber" v-perm="'subscriber:query'"
+                      :class="route.meta.name === 'subscriber' ? 'choose-item' : ''">
+          <Icon icon="mdi:account-box-multiple-outline" width="22" height="22" />
+          <span class="menu-name" style="margin-left: 20px">{{$t('subscribers')}}</span>
         </el-menu-item>
         <el-menu-item @click="router.push({name: 'role'})" index="setting" v-perm="'role:query'"
                       :class="route.meta.name === 'role' ? 'choose-item' : ''">

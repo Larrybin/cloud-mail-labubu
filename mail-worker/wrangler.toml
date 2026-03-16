@@ -38,6 +38,10 @@ crons = ["0 16 * * *"]	#定时任务每天晚上12点执行
 #FORM_API_TOKEN = ""		#/api/form/* 专用服务间令牌（Bearer）
 #FORM_ALLOWED_TO_EMAILS = ""	#/api/form/submit 允许的收件人（逗号分隔）
 #FORM_FILE_TTL_SECONDS = "604800"	#/api/form/file 下载签名有效期（秒）
+#INIT_HTTP_ENABLED = "false"	#/api/init/:secret 是否开启（生产建议保持 false）
+#PUBLIC_TOKEN_TTL_SECONDS = "86400"	#/api/public/genToken 令牌有效期（秒）
+#CORS_ADMIN_ALLOWED_ORIGINS = ""	#管理接口允许的跨域 Origin（逗号分隔）
+#CORS_PUBLIC_ALLOWED_ORIGINS = ""	#/api/public/* 与 /api/form/* 允许的跨域 Origin（逗号分隔）
 
 # secrets（通过 wrangler secret put 管理）:
 # - FORM_RESEND_API_KEY   # /api/form/submit 内部发信专用，不可透传

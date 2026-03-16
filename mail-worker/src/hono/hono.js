@@ -4,7 +4,52 @@ const app = new Hono();
 import result from '../model/result';
 import { cors } from 'hono/cors';
 
-app.use('*', cors());
+const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'accept-language'];
+const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
+
+function parseAllowedOrigins(rawValue) {
+	return String(rawValue || '')
+		.split(',')
+		.map(item => item.trim())
+		.filter(Boolean);
+}
+
+function isPublicPath(path) {
+	return path === '/public' ||
+		path.startsWith('/public/') ||
+		path === '/form' ||
+		path.startsWith('/form/');
+}
+
+function isSameOrigin(c, origin) {
+	try {
+		return origin === new URL(c.req.url).origin;
+	} catch {
+		return false;
+	}
+}
+
+function resolveOriginByPath(c, origin) {
+	if (!origin) return '';
+	if (isSameOrigin(c, origin)) return origin;
+
+	const envKey = isPublicPath(c.req.path)
+		? 'CORS_PUBLIC_ALLOWED_ORIGINS'
+		: 'CORS_ADMIN_ALLOWED_ORIGINS';
+	const allowedOrigins = parseAllowedOrigins(c.env?.[envKey]);
+	return allowedOrigins.includes(origin) ? origin : '';
+}
+
+app.use('*', async (c, next) => {
+	const corsMiddleware = cors({
+		origin: (origin) => resolveOriginByPath(c, origin),
+		allowHeaders: CORS_ALLOWED_HEADERS,
+		allowMethods: CORS_ALLOWED_METHODS,
+		credentials: true,
+		maxAge: 600,
+	});
+	return corsMiddleware(c, next);
+});
 
 app.onError((err, c) => {
 	const statusCode = Number.isInteger(err?.code) ? err.code : 500;
@@ -30,4 +75,3 @@ app.onError((err, c) => {
 });
 
 export default app;
-

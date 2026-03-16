@@ -109,6 +109,16 @@ const routers = {
             menu: true
         }
     }],
+    'subscriber:query': [{
+        path: '/subscribers',
+        name: 'subscriber',
+        component: () => import('@/views/subscriber/index.vue'),
+        meta: {
+            title: 'subscribers',
+            name: 'subscriber',
+            menu: true
+        }
+    }],
     'analysis:query': [{
         path: '/analysis',
         name: 'analysis',

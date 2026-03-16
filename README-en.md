@@ -65,6 +65,15 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **📜 More Features**: Under development...
 
+## Labubu Gateway Integration (New)
+
+- External paths: `POST /api/form/submit`, `GET /api/form/file`
+- Internal `mail-worker` routes: `/form/submit`, `/form/file` (`/api` prefix is stripped by entry forwarding)
+- `/form/*` uses dedicated `FORM_API_TOKEN` (higher priority than `/public/*` and default JWT/RBAC)
+- `POST /api/subscriber/subscribe` requires `Content-Length`, with JSON payload limit set to 64KB
+- `GET /api/subscriber/export` enforces paginated export (`page=1,size=5000` by default), and rejects `size > 5000`
+- `/api/init/:secret` is disabled by default and only available when `INIT_HTTP_ENABLED=true` (keep disabled in production)
+
 ## Tech Stack
 
 - **Platform**: [Cloudflare Workers](https://developers.cloudflare.com/workers/)
