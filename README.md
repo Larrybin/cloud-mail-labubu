@@ -77,7 +77,9 @@
 - `/form/*` 使用独立 `FORM_API_TOKEN` 鉴权，优先级高于 `/public/*` 与默认 JWT/RBAC 分支
 - `/api/form/submit` 现在必须携带 `brandId` 与 `siteOrigin`；发信 `from/to/fromName` 强制按租户配置覆盖
 - `FORM_TENANT_KEYRING`（JSON：`{kid:base64Key}`）用于解密租户级 Resend API Key，支持密钥轮转
-- 新增 `mail-worker/scripts/form-tenant-cli.mjs`：支持 `upsert/deactivate/rotate-key`，避免手写 SQL
+- 新增 `mail-worker/scripts/form-tenant-cli.mjs` 结构化契约：`--action <upsert|get|set-status|rotate-key> --request-json '<json>'`
+- `tenant:config` 成功仅输出 JSON 到 stdout；失败输出结构化错误 JSON 到 stderr（非零退出码）
+- `upsert` 支持“已有租户无 key 更新非密钥字段”；新租户仍要求提供 `resendApiKey + kid`
 - `POST /api/subscriber/subscribe` 需要 `Content-Length` 且 JSON 请求体上限 64KB
 - `GET /api/subscriber/export` 强制分页导出，默认 `page=1,size=5000`，`size > 5000` 将被拒绝
 - `/api/init/:secret` 默认关闭，仅当 `INIT_HTTP_ENABLED=true` 时可访问（生产建议保持关闭）

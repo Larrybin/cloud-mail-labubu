@@ -72,7 +72,9 @@ With only one domain, you can create multiple different email addresses, similar
 - `/form/*` uses dedicated `FORM_API_TOKEN` (higher priority than `/public/*` and default JWT/RBAC)
 - `/api/form/submit` now requires `brandId` and `siteOrigin`; `from/to/fromName` are enforced by tenant config
 - `FORM_TENANT_KEYRING` (JSON: `{kid:base64Key}`) decrypts tenant-level Resend API keys and supports key rotation
-- Added `mail-worker/scripts/form-tenant-cli.mjs` for `upsert/deactivate/rotate-key` tenant operations (no manual SQL)
+- Added structured `mail-worker/scripts/form-tenant-cli.mjs` contract: `--action <upsert|get|set-status|rotate-key> --request-json '<json>'`
+- `tenant:config` prints JSON to stdout on success; on failure it prints structured JSON errors to stderr and exits non-zero
+- `upsert` supports updating existing tenants without a new key (non-key fields only); creating a new tenant still requires `resendApiKey + kid`
 - `POST /api/subscriber/subscribe` requires `Content-Length`, with JSON payload limit set to 64KB
 - `GET /api/subscriber/export` enforces paginated export (`page=1,size=5000` by default), and rejects `size > 5000`
 - `/api/init/:secret` is disabled by default and only available when `INIT_HTTP_ENABLED=true` (keep disabled in production)

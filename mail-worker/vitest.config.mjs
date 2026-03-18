@@ -7,4 +7,7 @@ export default defineConfig({
 			wrangler: { configPath: './wrangler-test.toml' },
 		}),
 	],
+	test: {
+		poolMatchGlobs: [['test/form-tenant-cli.spec.js', 'threads']],
+	},
 });
