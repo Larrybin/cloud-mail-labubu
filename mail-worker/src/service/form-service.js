@@ -1,5 +1,7 @@
 import BizError from '../error/biz-error';
 import { Resend } from 'resend';
+import formTenantService from './form-tenant-service';
+import { decryptFormTenantSecret } from '../utils/form-tenant-crypto';
 
 export const FORM_ATTACHMENT_PREFIX = 'form-attachments/';
 const FORM_FILE_SIGN_PURPOSE = 'form-file';
@@ -51,10 +53,6 @@ function sanitizeFilename(filename) {
 
 function isValidEmail(value) {
 	return EMAIL_REGEX.test(toText(value));
-}
-
-function normalizeEmailValue(value) {
-	return toText(value).toLowerCase();
 }
 
 function parseFields(rawValue) {
@@ -143,13 +141,6 @@ function validateFiles(files) {
 	}
 }
 
-function resolveAllowedToEmails(env) {
-	return String(env.FORM_ALLOWED_TO_EMAILS || '')
-		.split(',')
-		.map((item) => normalizeEmailValue(item))
-		.filter(Boolean);
-}
-
 function resolveBodySizeLimit(contentType) {
 	if (contentType.includes('multipart/form-data')) {
 		return MAX_FORM_MULTIPART_BYTES;
@@ -173,25 +164,56 @@ function validateRequestSize(c, contentType) {
 	}
 }
 
-function validateSubmitPayload(payload, env) {
+function validateSubmitPayload(payload) {
 	if (!['quote', 'subscribe'].includes(payload.type)) {
 		throw new BizError('Invalid form type', 400);
 	}
-	if (!isValidEmail(payload.toEmail)) {
-		throw new BizError('Invalid toEmail', 400);
+	if (!toText(payload.brandId)) {
+		throw new BizError('brandId is required', 400);
 	}
-	if (!isValidEmail(payload.fromEmail)) {
-		throw new BizError('Invalid fromEmail', 400);
+	if (!formTenantService.normalizeOrigin(payload.siteOrigin)) {
+		throw new BizError('siteOrigin is required', 400);
 	}
+}
 
-	const allowedToEmails = resolveAllowedToEmails(env);
-	if (!allowedToEmails.length) {
-		throw new BizError('FORM_ALLOWED_TO_EMAILS is missing', 503);
-	}
+function buildResolvedPayload(payload, tenant) {
+	return {
+		...payload,
+		brandId: tenant.brandId,
+		siteOrigin: tenant.siteOrigin,
+		fromEmail: tenant.fromEmail,
+		fromName: tenant.fromName || 'Form',
+		toEmail: tenant.toEmail
+	};
+}
 
-	if (!allowedToEmails.includes(normalizeEmailValue(payload.toEmail))) {
-		throw new BizError('Forbidden toEmail', 403);
+async function resolveFormTenantContext(c, payload) {
+	const tenant = await formTenantService.getTenantByBrandId(c, payload.brandId);
+	formTenantService.assertTenantActive(tenant);
+	formTenantService.assertSiteOriginMatch(tenant, payload.siteOrigin);
+	let resendApiKey = '';
+	try {
+		resendApiKey = await decryptFormTenantSecret({
+			ciphertext: tenant.resendKeyCiphertext,
+			kid: tenant.resendKeyKid,
+			keyringRaw: c.env.FORM_TENANT_KEYRING
+		});
+	} catch {
+		throw new BizError('Form tenant resend key invalid', 503);
 	}
+	if (!isValidEmail(tenant.toEmail)) {
+		throw new BizError('Form tenant email invalid', 503);
+	}
+	if (!isValidEmail(tenant.fromEmail)) {
+		throw new BizError('Form tenant email invalid', 503);
+	}
+	if (!toText(resendApiKey)) {
+		throw new BizError('Form tenant resend key invalid', 503);
+	}
+	return {
+		tenant,
+		resendApiKey: toText(resendApiKey)
+	};
 }
 
 function formatFieldsRows(fields) {
@@ -286,11 +308,12 @@ async function parseSubmitPayload(c) {
 	if (contentType.includes('multipart/form-data')) {
 		const formData = await c.req.formData();
 		return {
-			payload: {
-				type: toText(formData.get('type')) || 'quote',
-				siteOrigin: toText(formData.get('siteOrigin')),
-				fromEmail: toText(formData.get('fromEmail')),
-				fromName: toText(formData.get('fromName')),
+				payload: {
+					type: toText(formData.get('type')) || 'quote',
+					brandId: toText(formData.get('brandId')),
+					siteOrigin: toText(formData.get('siteOrigin')),
+					fromEmail: toText(formData.get('fromEmail')),
+					fromName: toText(formData.get('fromName')),
 				toEmail: toText(formData.get('toEmail')),
 				fields: parseFields(formData.get('fields'))
 			},
@@ -299,12 +322,13 @@ async function parseSubmitPayload(c) {
 	}
 
 	const body = await c.req.json();
-	return {
-		payload: {
-			type: toText(body?.type) || 'quote',
-			siteOrigin: toText(body?.siteOrigin),
-			fromEmail: toText(body?.fromEmail),
-			fromName: toText(body?.fromName),
+		return {
+			payload: {
+				type: toText(body?.type) || 'quote',
+				brandId: toText(body?.brandId),
+				siteOrigin: toText(body?.siteOrigin),
+				fromEmail: toText(body?.fromEmail),
+				fromName: toText(body?.fromName),
 			toEmail: toText(body?.toEmail),
 			fields: parseFields(body?.fields)
 		},
@@ -314,13 +338,10 @@ async function parseSubmitPayload(c) {
 
 const formService = {
 	async submit(c) {
-		const resendApiKey = toText(c.env.FORM_RESEND_API_KEY);
-		if (!resendApiKey) {
-			throw new BizError('FORM_RESEND_API_KEY is missing', 503);
-		}
-
 		const { payload, files } = await parseSubmitPayload(c);
-		validateSubmitPayload(payload, c.env);
+		validateSubmitPayload(payload);
+		const { tenant, resendApiKey } = await resolveFormTenantContext(c, payload);
+		const resolvedPayload = buildResolvedPayload(payload, tenant);
 
 		let uploadedKeys = [];
 		let attachmentLinks = [];
@@ -332,17 +353,18 @@ const formService = {
 			let sendResult = null;
 			if (typeof c.env.FORM_SEND_EMAIL_FN === 'function') {
 				sendResult = await c.env.FORM_SEND_EMAIL_FN({
-					payload,
+					payload: resolvedPayload,
+					tenant,
 					attachmentLinks,
 					resendApiKey
 				});
 			} else {
 				const resend = new Resend(resendApiKey);
 				sendResult = await resend.emails.send({
-					from: `${payload.fromName || 'Form'} <${payload.fromEmail}>`,
-					to: [payload.toEmail],
-					subject: payload.type === 'quote' ? 'New Quote Request' : 'New Subscription',
-					html: buildSubmitEmailHtml({ payload, attachmentLinks })
+					from: `${resolvedPayload.fromName || 'Form'} <${resolvedPayload.fromEmail}>`,
+					to: [resolvedPayload.toEmail],
+					subject: resolvedPayload.type === 'quote' ? 'New Quote Request' : 'New Subscription',
+					html: buildSubmitEmailHtml({ payload: resolvedPayload, attachmentLinks })
 				});
 			}
 

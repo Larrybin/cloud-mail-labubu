@@ -35,7 +35,7 @@ domain = ["example.com", "example2.com", "example3.com", "example4.com"]
 admin = "admin@example.com"
 jwt_secret = "b7f29a1d-18e2-4d3b-941f-f6b2c97c02fd"
 FORM_API_TOKEN = "dev-form-api-token"
-FORM_ALLOWED_TO_EMAILS = "admin@example.com"
+FORM_TENANT_KEYRING = "{\"v1\":\"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=\"}"
 INIT_HTTP_ENABLED = "true"
 PUBLIC_TOKEN_TTL_SECONDS = "86400"
 CORS_ADMIN_ALLOWED_ORIGINS = ""

@@ -17,6 +17,8 @@
 | `DOMAIN`                |  ✅  | 您要用于邮件服务的域名（例如 `["xx.xx"]，多域名用,分隔`）        |
 | `ADMIN`                 |  ✅  | 您的管理员邮箱地址（例如 `admin@example.com`）      |
 | `JWT_SECRET`            |  ✅  | 用于生成和验证 JWT 的随机长字符串                     |
+| `FORM_API_TOKEN`        |  ✅  | `/api/form/*` 服务间 Bearer token                    |
+| `FORM_TENANT_KEYRING`   |  ✅  | 多租户密钥环（JSON：`{"kid":"base64-32bytes-key"}`） |
 | `INIT_URL`              |  ❌  | （可选）部署后用于初始化数据库的 Worker URL（格式参考下述手动初始化）           |
 
 ---

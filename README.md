@@ -75,8 +75,9 @@
 - 外部路径：`POST /api/form/submit`、`GET /api/form/file`
 - `mail-worker` 内部注册路径：`/form/submit`、`/form/file`（`/api` 前缀由入口转发剥离）
 - `/form/*` 使用独立 `FORM_API_TOKEN` 鉴权，优先级高于 `/public/*` 与默认 JWT/RBAC 分支
-- `/api/form/submit` 必须同时满足 `FORM_ALLOWED_TO_EMAILS` 收件人白名单与请求体大小限制
-- `FORM_RESEND_API_KEY` 仅在 mail-worker 内部发信用途，禁止透传到请求体、响应体、日志字段
+- `/api/form/submit` 现在必须携带 `brandId` 与 `siteOrigin`；发信 `from/to/fromName` 强制按租户配置覆盖
+- `FORM_TENANT_KEYRING`（JSON：`{kid:base64Key}`）用于解密租户级 Resend API Key，支持密钥轮转
+- 新增 `mail-worker/scripts/form-tenant-cli.mjs`：支持 `upsert/deactivate/rotate-key`，避免手写 SQL
 - `POST /api/subscriber/subscribe` 需要 `Content-Length` 且 JSON 请求体上限 64KB
 - `GET /api/subscriber/export` 强制分页导出，默认 `page=1,size=5000`，`size > 5000` 将被拒绝
 - `/api/init/:secret` 默认关闭，仅当 `INIT_HTTP_ENABLED=true` 时可访问（生产建议保持关闭）

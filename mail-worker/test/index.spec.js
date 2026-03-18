@@ -3,7 +3,10 @@ import { describe, it, expect } from 'vitest';
 import worker from '../src';
 import formService, { FORM_ATTACHMENT_PREFIX, createFormFileSignature } from '../src/service/form-service';
 import cryptoUtils from '../src/utils/crypto-utils';
+import { encryptFormTenantSecret } from '../src/utils/form-tenant-crypto';
 import KvConst from '../src/const/kv-const';
+
+const TEST_FORM_TENANT_KEYRING = env.FORM_TENANT_KEYRING || '{"v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}';
 
 async function initDatabase() {
 	const req = new Request(`https://mail.example/api/init/${env.jwt_secret}`);
@@ -11,6 +14,42 @@ async function initDatabase() {
 	const resp = await worker.fetch(req, env, ctx);
 	await waitOnExecutionContext(ctx);
 	expect(resp.status).toBe(200);
+}
+
+async function upsertFormTenant({
+	brandId = 'demo-brand',
+	brandName = 'Demo Brand',
+	siteOrigin = 'https://site.example',
+	fromEmail = 'no-reply@example.com',
+	fromName = 'Labubu',
+	toEmail = 'admin@example.com',
+	status = 'active',
+	resendApiKey = 're_test',
+	kid = 'v1'
+} = {}) {
+	const ciphertext = await encryptFormTenantSecret({
+		plaintext: resendApiKey,
+		kid,
+		keyringRaw: TEST_FORM_TENANT_KEYRING
+	});
+	await env.db
+		.prepare(
+			`INSERT INTO form_tenant (
+        brand_id, brand_name, site_origin, from_email, from_name, to_email, resend_key_ciphertext, resend_key_kid, status, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(brand_id) DO UPDATE SET
+        brand_name = excluded.brand_name,
+        site_origin = excluded.site_origin,
+        from_email = excluded.from_email,
+        from_name = excluded.from_name,
+        to_email = excluded.to_email,
+        resend_key_ciphertext = excluded.resend_key_ciphertext,
+        resend_key_kid = excluded.resend_key_kid,
+        status = excluded.status,
+        updated_at = CURRENT_TIMESTAMP`,
+		)
+		.bind(brandId, brandName, siteOrigin, fromEmail, fromName, toEmail, ciphertext, kid, status)
+		.run();
 }
 
 async function ensureAdminUser(password = 'public-api-password') {
@@ -76,8 +115,7 @@ describe('form api security', () => {
 		});
 		const env = {
 			FORM_API_TOKEN: 'correct-token',
-			FORM_ALLOWED_TO_EMAILS: 'admin@example.com',
-			FORM_RESEND_API_KEY: 're_test'
+			FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING
 		};
 		const ctx = createExecutionContext();
 		const resp = await worker.fetch(req, env, ctx);
@@ -85,7 +123,7 @@ describe('form api security', () => {
 		expect(resp.status).toBe(413);
 	});
 
-	it('returns 403 on /api/form/submit when toEmail is outside allowlist', async () => {
+	it('returns 400 on /api/form/submit when brandId is missing', async () => {
 		const req = new Request('https://mail.example/api/form/submit', {
 			method: 'POST',
 			headers: {
@@ -95,18 +133,48 @@ describe('form api security', () => {
 			},
 			body: JSON.stringify({
 				type: 'subscribe',
-				fromEmail: 'no-reply@example.com',
-				fromName: 'Labubu',
-				toEmail: 'other@example.com'
+				siteOrigin: 'https://site.example'
 			})
 		});
-		const env = {
+		const requestEnv = {
 			FORM_API_TOKEN: 'correct-token',
-			FORM_ALLOWED_TO_EMAILS: 'admin@example.com',
-			FORM_RESEND_API_KEY: 're_test'
+			FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING
 		};
 		const ctx = createExecutionContext();
-		const resp = await worker.fetch(req, env, ctx);
+		const resp = await worker.fetch(req, requestEnv, ctx);
+		await waitOnExecutionContext(ctx);
+		expect(resp.status).toBe(400);
+	});
+
+	it('returns 403 on /api/form/submit when payload siteOrigin mismatches tenant origin', async () => {
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'demo-brand',
+			siteOrigin: 'https://site.example'
+		});
+		const req = new Request('https://mail.example/api/form/submit', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				Authorization: 'Bearer correct-token',
+				'content-length': '128'
+			},
+			body: JSON.stringify({
+				type: 'subscribe',
+				brandId: 'demo-brand',
+				siteOrigin: 'https://evil.example',
+				fromEmail: 'fake@example.com',
+				fromName: 'Fake',
+				toEmail: 'fake@example.com'
+			})
+		});
+			const requestEnv = {
+				...env,
+				FORM_API_TOKEN: 'correct-token',
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING
+			};
+			const ctx = createExecutionContext();
+			const resp = await worker.fetch(req, requestEnv, ctx);
 		await waitOnExecutionContext(ctx);
 		expect(resp.status).toBe(403);
 	});
@@ -284,14 +352,24 @@ describe('form file route integration', () => {
 describe('form service submit', () => {
 	it('supports multipart submit and uploads attachments to form-attachments/ prefix', async () => {
 		const uploadedKeys = [];
+		const captured = [];
 		const formData = new FormData();
 		formData.set('type', 'quote');
+		formData.set('brandId', 'demo-brand');
 		formData.set('siteOrigin', 'https://site.example');
-		formData.set('fromEmail', 'no-reply@example.com');
-		formData.set('fromName', 'Labubu');
-		formData.set('toEmail', 'admin@example.com');
+		formData.set('fromEmail', 'ignored@example.com');
+		formData.set('fromName', 'Ignored');
+		formData.set('toEmail', 'ignored@example.com');
 		formData.set('fields', JSON.stringify({ message: 'hello' }));
 		formData.append('file_0', new File(['hello'], 'a.pdf', { type: 'application/pdf' }));
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'demo-brand',
+			siteOrigin: 'https://site.example',
+			fromEmail: 'brand-from@example.com',
+			fromName: 'Brand Sender',
+			toEmail: 'brand-to@example.com'
+		});
 
 		const ctx = {
 			req: {
@@ -304,13 +382,16 @@ describe('form service submit', () => {
 				formData: async () => formData
 			},
 			env: {
-				FORM_RESEND_API_KEY: 're_test',
-				FORM_ALLOWED_TO_EMAILS: 'admin@example.com',
+				db: env.db,
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING,
 				FORM_FILE_SECRET: 'file-secret',
 				r2: {
 					put: async (key) => uploadedKeys.push(key)
 				},
-				FORM_SEND_EMAIL_FN: async () => ({ data: { id: 'ok' } })
+				FORM_SEND_EMAIL_FN: async (args) => {
+					captured.push(args);
+					return { data: { id: 'ok' } };
+				}
 			}
 		};
 
@@ -318,17 +399,83 @@ describe('form service submit', () => {
 		expect(result.attachmentCount).toBe(1);
 		expect(uploadedKeys.length).toBe(1);
 		expect(uploadedKeys[0].startsWith(FORM_ATTACHMENT_PREFIX)).toBe(true);
+		expect(captured.length).toBe(1);
+		expect(captured[0].payload.fromEmail).toBe('brand-from@example.com');
+		expect(captured[0].payload.toEmail).toBe('brand-to@example.com');
+	});
+
+	it('routes different brands to different resend keys and from/to addresses', async () => {
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'brand-a',
+			brandName: 'Brand A',
+			siteOrigin: 'https://a.example',
+			fromEmail: 'no-reply@a.example',
+			toEmail: 'sales@a.example',
+			resendApiKey: 're_a'
+		});
+		await upsertFormTenant({
+			brandId: 'brand-b',
+			brandName: 'Brand B',
+			siteOrigin: 'https://b.example',
+			fromEmail: 'no-reply@b.example',
+			toEmail: 'sales@b.example',
+			resendApiKey: 're_b'
+		});
+
+		const calls = [];
+		const buildCtx = ({ brandId, siteOrigin }) => ({
+			req: {
+				url: 'https://mail.example/api/form/submit',
+				header: (name) => {
+					if (name === 'content-type') return 'application/json';
+					if (name === 'content-length') return '256';
+					return '';
+				},
+				json: async () => ({
+					type: 'quote',
+					brandId,
+					siteOrigin,
+					fields: { message: 'hello' }
+				})
+			},
+			env: {
+				db: env.db,
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING,
+				FORM_SEND_EMAIL_FN: async (args) => {
+					calls.push(args);
+					return { data: { id: 'ok' } };
+				}
+			}
+		});
+
+		await formService.submit(buildCtx({ brandId: 'brand-a', siteOrigin: 'https://a.example' }));
+		await formService.submit(buildCtx({ brandId: 'brand-b', siteOrigin: 'https://b.example' }));
+
+		expect(calls).toHaveLength(2);
+		expect(calls[0].resendApiKey).toBe('re_a');
+		expect(calls[0].payload.fromEmail).toBe('no-reply@a.example');
+		expect(calls[0].payload.toEmail).toBe('sales@a.example');
+		expect(calls[1].resendApiKey).toBe('re_b');
+		expect(calls[1].payload.fromEmail).toBe('no-reply@b.example');
+		expect(calls[1].payload.toEmail).toBe('sales@b.example');
 	});
 
 	it('rolls back uploaded files when send fails', async () => {
 		const deletedBatches = [];
 		const formData = new FormData();
 		formData.set('type', 'quote');
+		formData.set('brandId', 'demo-brand');
 		formData.set('siteOrigin', 'https://site.example');
-		formData.set('fromEmail', 'no-reply@example.com');
-		formData.set('fromName', 'Labubu');
-		formData.set('toEmail', 'admin@example.com');
+		formData.set('fromEmail', 'ignored@example.com');
+		formData.set('fromName', 'Ignored');
+		formData.set('toEmail', 'ignored@example.com');
 		formData.append('file_0', new File(['hello'], 'a.pdf', { type: 'application/pdf' }));
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'demo-brand',
+			siteOrigin: 'https://site.example'
+		});
 
 		const ctx = {
 			req: {
@@ -341,8 +488,8 @@ describe('form service submit', () => {
 				formData: async () => formData
 			},
 			env: {
-				FORM_RESEND_API_KEY: 're_test',
-				FORM_ALLOWED_TO_EMAILS: 'admin@example.com',
+				db: env.db,
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING,
 				FORM_FILE_SECRET: 'file-secret',
 				r2: {
 					put: async () => {},

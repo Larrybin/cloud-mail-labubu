@@ -26,14 +26,15 @@ const dbInit = {
 		await this.v2_5DB(c);
 		await this.v2_6DB(c);
 		await this.v2_7DB(c);
-		await this.v2_8DB(c);
-		await this.v2_9DB(c);
-		await this.v3DB(c);
-		await settingService.refresh(c);
-		return c.text('success');
-	},
+			await this.v2_8DB(c);
+			await this.v2_9DB(c);
+			await this.v3DB(c);
+			await this.v3_1DB(c);
+			await settingService.refresh(c);
+			return c.text('success');
+		},
 
-	async v3DB(c) {
+		async v3DB(c) {
 		try {
 			await c.env.db.prepare(`
 				CREATE TABLE IF NOT EXISTS subscriber (
@@ -93,7 +94,37 @@ const dbInit = {
 		} catch (e) {
 			console.warn(`跳过订阅权限：${e.message}`);
 		}
-	},
+		},
+
+		async v3_1DB(c) {
+			try {
+				await c.env.db.prepare(`
+					CREATE TABLE IF NOT EXISTS form_tenant (
+						brand_id TEXT PRIMARY KEY,
+						brand_name TEXT NOT NULL DEFAULT '',
+						site_origin TEXT NOT NULL,
+						from_email TEXT NOT NULL,
+						from_name TEXT NOT NULL DEFAULT 'Form',
+						to_email TEXT NOT NULL,
+						resend_key_ciphertext TEXT NOT NULL,
+						resend_key_kid TEXT NOT NULL,
+						status TEXT NOT NULL DEFAULT 'active',
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+					)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE UNIQUE INDEX IF NOT EXISTS idx_form_tenant_site_origin
+					ON form_tenant (site_origin)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE INDEX IF NOT EXISTS idx_form_tenant_status
+					ON form_tenant (status)
+				`).run();
+			} catch (e) {
+				console.warn(`跳过表单租户表：${e.message}`);
+			}
+		},
 
 	async v2_9DB(c) {
 		try {
