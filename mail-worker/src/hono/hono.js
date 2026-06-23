@@ -5,7 +5,7 @@ import result from '../model/result';
 import { cors } from 'hono/cors';
 
 const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'accept-language'];
-const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
+const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 function parseAllowedOrigins(rawValue) {
 	return String(rawValue || '')
@@ -15,6 +15,7 @@ function parseAllowedOrigins(rawValue) {
 }
 
 function isPublicPath(path) {
+	if (path === '/form/inquiries' || path.startsWith('/form/inquiries/')) return false;
 	return path === '/public' ||
 		path.startsWith('/public/') ||
 		path === '/form' ||

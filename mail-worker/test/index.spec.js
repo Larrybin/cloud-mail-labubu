@@ -461,6 +461,95 @@ describe('form service submit', () => {
 		expect(calls[1].payload.toEmail).toBe('sales@b.example');
 	});
 
+	it('stores visitor identity from top-level submit fields', async () => {
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'visitor-identity',
+			siteOrigin: 'https://visitor.example',
+			fromEmail: 'brand-from@example.com',
+			fromName: 'Brand Sender'
+		});
+
+		await formService.submit({
+			req: {
+				url: 'https://mail.example/api/form/submit',
+				header: (name) => {
+					if (name === 'content-type') return 'application/json';
+					if (name === 'content-length') return '256';
+					return '';
+				},
+				json: async () => ({
+					type: 'quote',
+					brandId: 'visitor-identity',
+					siteOrigin: 'https://visitor.example',
+					fromEmail: 'buyer@example.com',
+					fromName: 'Buyer Name',
+					fields: { message: 'hello' }
+				})
+			},
+			env: {
+				db: env.db,
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING,
+				FORM_SEND_EMAIL_FN: async () => ({ data: { id: 'ok' } })
+			}
+		});
+
+		const row = await env.db
+			.prepare('SELECT name, email FROM form_inquiry WHERE brand_id = ? ORDER BY id DESC LIMIT 1')
+			.bind('visitor-identity')
+			.first();
+		expect(row?.name).toBe('Buyer Name');
+		expect(row?.email).toBe('buyer@example.com');
+	});
+
+	it('does not roll back uploaded files when inquiry persistence fails after send', async () => {
+		const deletedBatches = [];
+		const formData = new FormData();
+		formData.set('type', 'quote');
+		formData.set('brandId', 'inquiry-failure');
+		formData.set('siteOrigin', 'https://failure.example');
+		formData.append('file_0', new File(['hello'], 'a.pdf', { type: 'application/pdf' }));
+		await initDatabase();
+		await upsertFormTenant({
+			brandId: 'inquiry-failure',
+			siteOrigin: 'https://failure.example'
+		});
+
+		const failingInquiryDb = {
+			prepare(sql) {
+				if (sql.includes('INSERT INTO form_inquiry')) {
+					throw new Error('inquiry insert failed');
+				}
+				return env.db.prepare(sql);
+			}
+		};
+
+		const result = await formService.submit({
+			req: {
+				url: 'https://mail.example/api/form/submit',
+				header: (name) => {
+					if (name === 'content-type') return 'multipart/form-data';
+					if (name === 'content-length') return '1024';
+					return '';
+				},
+				formData: async () => formData
+			},
+			env: {
+				db: failingInquiryDb,
+				FORM_TENANT_KEYRING: TEST_FORM_TENANT_KEYRING,
+				FORM_FILE_SECRET: 'file-secret',
+				r2: {
+					put: async () => {},
+					delete: async (keys) => deletedBatches.push(keys)
+				},
+				FORM_SEND_EMAIL_FN: async () => ({ data: { id: 'ok' } })
+			}
+		});
+
+		expect(result.attachmentCount).toBe(1);
+		expect(deletedBatches).toHaveLength(0);
+	});
+
 	it('rolls back uploaded files when send fails', async () => {
 		const deletedBatches = [];
 		const formData = new FormData();

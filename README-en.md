@@ -65,12 +65,15 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **📜 More Features**: Under development...
 
-## Labubu Gateway Integration (New)
+## Labubu Admin Integration
 
 - External paths: `POST /api/form/submit`, `GET /api/form/file`
 - Internal `mail-worker` routes: `/form/submit`, `/form/file` (`/api` prefix is stripped by entry forwarding)
-- `/form/*` uses dedicated `FORM_API_TOKEN` (higher priority than `/public/*` and default JWT/RBAC)
+- Brand-site submission paths use `FORM_API_TOKEN`; `/api/admin/*` and `/api/form/inquiries` use `ADMIN_API_TOKEN`
 - `/api/form/submit` now requires `brandId` and `siteOrigin`; `from/to/fromName` are enforced by tenant config
+- `/api/form/submit` stores a `form_inquiry` row after a successful send for the labubu-admin inquiries page
+- `/api/admin/cf-accounts` manages the Cloudflare account pool used by labubu-admin deployment flows
+- `/api/admin/cloud-mail/summary` exposes the Cloud Mail operations summary for the labubu-admin dashboard
 - `FORM_TENANT_KEYRING` (JSON: `{kid:base64Key}`) decrypts tenant-level Resend API keys and supports key rotation
 - Added structured `mail-worker/scripts/form-tenant-cli.mjs` contract: `--action <upsert|get|set-status|rotate-key> --request-json '<json>'`
 - `tenant:config` prints JSON to stdout on success; on failure it prints structured JSON errors to stderr and exits non-zero
@@ -79,6 +82,18 @@ With only one domain, you can create multiple different email addresses, similar
 - `GET /api/subscriber/export` enforces paginated export (`page=1,size=5000` by default), and rejects `size > 5000`
 - `/api/init/:secret` is disabled by default and only available when `INIT_HTTP_ENABLED=true` (keep disabled in production)
 
+### Secrets
+
+Production secrets are managed with Wrangler and are not stored in `wrangler.toml`:
+
+```bash
+wrangler secret put ADMIN_API_TOKEN
+wrangler secret put FORM_API_TOKEN
+wrangler secret put FORM_FILE_SECRET
+wrangler secret put FORM_TENANT_KEYRING
+wrangler secret put jwt_secret
+```
+
 ## Tech Stack
 
 - **Platform**: [Cloudflare Workers](https://developers.cloudflare.com/workers/)
@@ -86,10 +101,6 @@ With only one domain, you can create multiple different email addresses, similar
 - **Web Framework**: [Hono](https://hono.dev/)
 
 - **ORM**: [Drizzle](https://orm.drizzle.team/)
-
-- **Frontend Framework**: [Vue3](https://vuejs.org/)
-
-- **UI Framework**: [Element Plus](https://element-plus.org/)
 
 - **Email Service**: [Resend](https://resend.com/)
 
@@ -122,26 +133,6 @@ cloud-mail
 │   │   └── index.js			# Entry point
 │   ├── package.json			# Project dependencies
 │   └── wrangler.toml			# Project configuration
-│
-├─ mail-vue				        # Frontend Vue project
-│   ├── src
-│   │   ├── axios 			    # Axios configuration
-│   │   ├── components			# Custom components
-│   │   ├── echarts			    # ECharts integration
-│   │   ├── i18n			    # Internationalization
-│   │   ├── init			    # Startup initialization
-│   │   ├── layout			    # Main layout components
-│   │   ├── perm			    # Permissions and access control
-│   │   ├── request			    # API request layer
-│   │   ├── router			    # Router configuration
-│   │   ├── store			    # Global state management
-│   │   ├── utils			    # Utility functions
-│   │   ├── views			    # Page components
-│   │   ├── app.vue			    # Root component
-│   │   ├── main.js			    # Entry JS file
-│   │   └── style.css			# Global styles
-│   ├── package.json			# Project dependencies
-└── └── env.release				# Environment configuration
 
 ```
 

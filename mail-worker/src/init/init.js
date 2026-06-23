@@ -30,6 +30,7 @@ const dbInit = {
 			await this.v2_9DB(c);
 			await this.v3DB(c);
 			await this.v3_1DB(c);
+			await this.v3_2DB(c);
 			await settingService.refresh(c);
 			return c.text('success');
 		},
@@ -123,6 +124,66 @@ const dbInit = {
 				`).run();
 			} catch (e) {
 				console.warn(`跳过表单租户表：${e.message}`);
+			}
+		},
+
+		async v3_2DB(c) {
+			try {
+				await c.env.db.prepare(`
+					CREATE TABLE IF NOT EXISTS cf_account (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						name TEXT NOT NULL,
+						cf_account_id TEXT NOT NULL,
+						cf_api_token TEXT NOT NULL DEFAULT '',
+						resend_api_key TEXT NOT NULL DEFAULT '',
+						bridge_token TEXT NOT NULL DEFAULT '',
+						domains TEXT NOT NULL DEFAULT '',
+						note TEXT NOT NULL DEFAULT '',
+						is_primary INTEGER NOT NULL DEFAULT 0,
+						status TEXT NOT NULL DEFAULT 'active',
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+					)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE UNIQUE INDEX IF NOT EXISTS idx_cf_account_account_id
+					ON cf_account (cf_account_id)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE INDEX IF NOT EXISTS idx_cf_account_status
+					ON cf_account (status)
+				`).run();
+			} catch (e) {
+				console.warn(`跳过 CF 账户池表：${e.message}`);
+			}
+
+			try {
+				await c.env.db.prepare(`
+					CREATE TABLE IF NOT EXISTS form_inquiry (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						brand_id TEXT NOT NULL,
+						site_origin TEXT NOT NULL,
+						name TEXT NOT NULL DEFAULT '',
+						email TEXT NOT NULL DEFAULT '',
+						company TEXT NOT NULL DEFAULT '',
+						message TEXT NOT NULL DEFAULT '',
+						html TEXT NOT NULL DEFAULT '',
+						attachments_json TEXT NOT NULL DEFAULT '[]',
+						status TEXT NOT NULL DEFAULT 'unread',
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+					)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE INDEX IF NOT EXISTS idx_form_inquiry_created_at
+					ON form_inquiry (created_at DESC)
+				`).run();
+				await c.env.db.prepare(`
+					CREATE INDEX IF NOT EXISTS idx_form_inquiry_brand_status
+					ON form_inquiry (brand_id, status)
+				`).run();
+			} catch (e) {
+				console.warn(`跳过询盘表：${e.message}`);
 			}
 		},
 

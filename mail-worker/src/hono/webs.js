@@ -20,6 +20,7 @@ import '../api/reg-key-api'
 import '../api/public-api'
 import '../api/form-api'
 import '../api/subscriber-api'
+import '../api/admin-api'
 import '../api/telegram-api'
 import '../api/oauth-api'
 export default app;

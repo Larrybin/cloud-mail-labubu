@@ -1,0 +1,5 @@
+ADMIN_API_TOKEN=change-me-admin-token
+FORM_API_TOKEN=change-me-form-token
+FORM_FILE_SECRET=change-me-file-secret
+FORM_TENANT_KEYRING={"v1":"base64-32-byte-key"}
+jwt_secret=change-me-jwt-secret

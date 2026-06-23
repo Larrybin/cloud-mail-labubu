@@ -70,12 +70,15 @@
 
 - **📜 更多功能**：正在开发中...
 
-## 与 Labubu 网关集成（新增）
+## 与 Labubu Admin 集成
 
 - 外部路径：`POST /api/form/submit`、`GET /api/form/file`
 - `mail-worker` 内部注册路径：`/form/submit`、`/form/file`（`/api` 前缀由入口转发剥离）
-- `/form/*` 使用独立 `FORM_API_TOKEN` 鉴权，优先级高于 `/public/*` 与默认 JWT/RBAC 分支
+- 品牌站点提交路径使用 `FORM_API_TOKEN`；`/api/admin/*` 与 `/api/form/inquiries` 使用 `ADMIN_API_TOKEN`
 - `/api/form/submit` 现在必须携带 `brandId` 与 `siteOrigin`；发信 `from/to/fromName` 强制按租户配置覆盖
+- `/api/form/submit` 发信成功后写入 `form_inquiry`，供 labubu-admin 的询盘页读取
+- `/api/admin/cf-accounts` 管理 Cloudflare 子账户池，供 labubu-admin 创建、部署、绑定域名时使用
+- `/api/admin/cloud-mail/summary` 给 labubu-admin 仪表盘展示 Cloud Mail 运行摘要
 - `FORM_TENANT_KEYRING`（JSON：`{kid:base64Key}`）用于解密租户级 Resend API Key，支持密钥轮转
 - 新增 `mail-worker/scripts/form-tenant-cli.mjs` 结构化契约：`--action <upsert|get|set-status|rotate-key> --request-json '<json>'`
 - `tenant:config` 成功仅输出 JSON 到 stdout；失败输出结构化错误 JSON 到 stderr（非零退出码）
@@ -83,6 +86,18 @@
 - `POST /api/subscriber/subscribe` 需要 `Content-Length` 且 JSON 请求体上限 64KB
 - `GET /api/subscriber/export` 强制分页导出，默认 `page=1,size=5000`，`size > 5000` 将被拒绝
 - `/api/init/:secret` 默认关闭，仅当 `INIT_HTTP_ENABLED=true` 时可访问（生产建议保持关闭）
+
+### Secrets
+
+生产环境使用 Wrangler secret 管理敏感值，不写入 `wrangler.toml`：
+
+```bash
+wrangler secret put ADMIN_API_TOKEN
+wrangler secret put FORM_API_TOKEN
+wrangler secret put FORM_FILE_SECRET
+wrangler secret put FORM_TENANT_KEYRING
+wrangler secret put jwt_secret
+```
 
 
 
@@ -93,10 +108,6 @@
 - **Web框架**：[Hono](https://hono.dev/)
 
 - **ORM：**[Drizzle](https://orm.drizzle.team/)
-
-- **前端框架**：[Vue3](https://vuejs.org/) 
-
-- **UI框架**：[Element Plus](https://element-plus.org/) 
 
 - **邮件推送：** [Resend](https://resend.com/)
 
@@ -129,26 +140,6 @@ cloud-mail
 │   │   └── index.js			# 入口文件
 │   ├── pageckge.json			# 项目依赖
 │   └── wrangler.toml			# 项目配置
-│
-├── mail-vue				    # vue前端项目
-│   ├── src
-│   │   ├── axios 			    # axios配置
-│   │   ├── components			# 自定义组件
-│   │   ├── echarts			    # echarts组件导入
-│   │   ├── i18n			    # 语言国际化
-│   │   ├── init			    # 入站初始化
-│   │   ├── layout			    # 主体布局组件
-│   │   ├── perm			    # 权限认证
-│   │   ├── request			    # api接口
-│   │   ├── router			    # 路由配置
-│   │   ├── store			    # 全局状态管理
-│   │   ├── utils			    # 工具类
-│   │   ├── views			    # 页面组件
-│   │   ├── app.vue			    # 入口组件
-│   │   ├── main.js			    # 入口js
-│   │   └── style.css			# 全局css
-│   ├── package.json			# 项目依赖
-└── └── env.release				# 项目配置
 ```
 
 ## 赞助

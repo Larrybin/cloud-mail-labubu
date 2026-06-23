@@ -17,14 +17,8 @@ id = "9be10cd058e04c55b526f8c0c116f50c"					#kv数据库id
 
 #(可选)
 #[[r2_buckets]]
-#binding = "r2"			#r2对象存储绑定名默认不可修改
-#bucket_name = "test-email"		#r2对象存储桶的名字
-
-[assets]
-binding = "assets"		#静态资源绑定名默认不可修改
-directory = "./test-assets"	# 测试仅校验 worker API，不依赖前端静态产物
-not_found_handling = "single-page-application"
-run_worker_first = true
+#binding = "r2"
+#bucket_name = "test-email"
 
 [triggers]
 crons = ["0 16 * * *"]	#定时任务每天晚上12点执行
@@ -35,6 +29,7 @@ orm_log = false
 domain = ["example.com"]				#邮件域名可可配置多个 示例: ["example1.com","example2.com"]
 admin = "admin@example.com"				#管理员的邮箱	示例: admin@example.com
 jwt_secret = "b7f29a1d-18e2-4d3b-941f-f6b2c97c02fd"			#jwt令牌的密钥,随便填一串字符串
+ADMIN_API_TOKEN = "test-admin-api-token"
 FORM_API_TOKEN = "test-form-api-token"
 FORM_TENANT_KEYRING = "{\"v1\":\"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=\"}"
 FORM_FILE_TTL_SECONDS = "600"
@@ -45,6 +40,3 @@ CORS_PUBLIC_ALLOWED_ORIGINS = ""
 
 # secrets for tests/local verification:
 # wrangler secret put FORM_FILE_SECRET --config wrangler-test.toml
-
-[build]
-command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

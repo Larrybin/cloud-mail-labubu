@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - "mail-worker/**"
-      - "mail-vue/**"
   workflow_dispatch:
 
 jobs:
@@ -19,6 +18,7 @@ jobs:
       DOMAIN: ${{ secrets.DOMAIN || vars.DOMAIN }}
       ADMIN: ${{ secrets.ADMIN || vars.ADMIN }}
       JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET }}
+      ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN || vars.ADMIN_API_TOKEN }}
       FORM_API_TOKEN: ${{ secrets.FORM_API_TOKEN || vars.FORM_API_TOKEN }}
       FORM_TENANT_KEYRING: ${{ secrets.FORM_TENANT_KEYRING || vars.FORM_TENANT_KEYRING }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
@@ -85,6 +85,11 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$ADMIN_API_TOKEN" ]; then
+            echo "❌ ADMIN_API_TOKEN variable cannot be empty."
+            exit 1
+          fi
+
           if [ -z "$FORM_TENANT_KEYRING" ]; then
             echo "❌ FORM_TENANT_KEYRING variable cannot be empty."
             exit 1
@@ -123,6 +128,7 @@ jobs:
           sed -i "s|\"\${DOMAIN}\"|${DOMAIN}|g" "$CONFIG_FILE"
           sed -i "s|\${ADMIN}|${ADMIN}|g" "$CONFIG_FILE"
           sed -i "s|\${JWT_SECRET}|${JWT_SECRET}|g" "$CONFIG_FILE"
+          sed -i "s|\${ADMIN_API_TOKEN}|${ADMIN_API_TOKEN}|g" "$CONFIG_FILE"
           sed -i "s|\${FORM_API_TOKEN}|${FORM_API_TOKEN}|g" "$CONFIG_FILE"
           sed -i "s|\${FORM_TENANT_KEYRING}|${FORM_TENANT_KEYRING}|g" "$CONFIG_FILE"
           sed -i "s|\${R2_BUCKET_NAME}|${R2_BUCKET_NAME}|g" "$CONFIG_FILE"

@@ -1,6 +1,7 @@
 import BizError from '../error/biz-error';
 import { Resend } from 'resend';
 import formTenantService from './form-tenant-service';
+import formInquiryService from './form-inquiry-service';
 import { decryptFormTenantSecret } from '../utils/form-tenant-crypto';
 
 export const FORM_ATTACHMENT_PREFIX = 'form-attachments/';
@@ -345,10 +346,12 @@ const formService = {
 
 		let uploadedKeys = [];
 		let attachmentLinks = [];
+		let html = '';
 		try {
 			const uploadResult = await uploadFiles(c, files);
 			uploadedKeys = uploadResult.uploadedKeys;
 			attachmentLinks = uploadResult.attachmentLinks;
+			html = buildSubmitEmailHtml({ payload: resolvedPayload, attachmentLinks });
 
 			let sendResult = null;
 			if (typeof c.env.FORM_SEND_EMAIL_FN === 'function') {
@@ -356,6 +359,7 @@ const formService = {
 					payload: resolvedPayload,
 					tenant,
 					attachmentLinks,
+					html,
 					resendApiKey
 				});
 			} else {
@@ -364,7 +368,7 @@ const formService = {
 					from: `${resolvedPayload.fromName || 'Form'} <${resolvedPayload.fromEmail}>`,
 					to: [resolvedPayload.toEmail],
 					subject: resolvedPayload.type === 'quote' ? 'New Quote Request' : 'New Subscription',
-					html: buildSubmitEmailHtml({ payload: resolvedPayload, attachmentLinks })
+					html
 				});
 			}
 
@@ -374,6 +378,21 @@ const formService = {
 		} catch (error) {
 			await rollbackUploadedFiles(c, uploadedKeys);
 			throw error;
+		}
+
+		try {
+			await formInquiryService.create(c, {
+				payload: {
+					...payload,
+					brandId: resolvedPayload.brandId,
+					siteOrigin: resolvedPayload.siteOrigin
+				},
+				fields: payload.fields,
+				html,
+				attachments: attachmentLinks
+			});
+		} catch (error) {
+			console.error('Persist form inquiry failed', error);
 		}
 
 		return {

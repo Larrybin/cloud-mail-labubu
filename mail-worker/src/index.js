@@ -20,7 +20,7 @@ export default {
 			 return await kvObjService.toObjResp( { env }, url.pathname.substring(1));
 		 }
 
-		return env.assets.fetch(req);
+		return new Response('Not Found', { status: 404 });
 	},
 	email: email,
 	async scheduled(c, env, ctx) {

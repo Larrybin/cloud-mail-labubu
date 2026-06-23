@@ -111,6 +111,14 @@ function extractHeaderToken(headerValue) {
 	return headerValue.trim();
 }
 
+function requireAdminApiToken(c) {
+	const expectedToken = String(c.env.ADMIN_API_TOKEN || '').trim();
+	const token = extractBearerToken(c.req.header(constant.TOKEN_HEADER));
+	if (!expectedToken || token !== expectedToken) {
+		throw new BizError(t('publicTokenFail'), 401);
+	}
+}
+
 app.use('*', async (c, next) => {
 
 	const path = c.req.path;
@@ -124,6 +132,11 @@ app.use('*', async (c, next) => {
 	}
 
 	if (path === '/form/file') {
+		return await next();
+	}
+
+	if (path.startsWith('/admin/') || path === '/form/inquiries' || path.startsWith('/form/inquiries/')) {
+		requireAdminApiToken(c);
 		return await next();
 	}
 
